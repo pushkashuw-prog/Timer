@@ -1,0 +1,342 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Timer</title>
+
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: #000;
+    color: white;
+    font-family: -apple-system, BlinkMacSystemFont, "Arial Rounded MT Bold", sans-serif;
+    height: 100dvh;
+    width: 100%;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.app {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: #000;
+}
+
+.display {
+    font-size: clamp(80px, 19vw, 190px);
+    font-weight: 900;
+    letter-spacing: -5px;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    user-select: none;
+    line-height: 1;
+}
+
+.controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+    margin-top: 45px;
+    width: 100%;
+    padding: 20px;
+}
+
+.modes {
+    display: flex;
+    gap: 10px;
+}
+
+button {
+    border: none;
+    cursor: pointer;
+    color: white;
+    background: #242424;
+    border-radius: 16px;
+    padding: 15px 23px;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+button.active {
+    background: white;
+    color: black;
+}
+
+.time-inputs {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+input {
+    width: 85px;
+    height: 65px;
+    background: #1c1c1e;
+    color: white;
+    border: none;
+    border-radius: 15px;
+    text-align: center;
+    font-size: 27px;
+    font-weight: 800;
+    outline: none;
+}
+
+.separator {
+    font-size: 30px;
+    font-weight: 900;
+}
+
+.main-button {
+    background: white;
+    color: black;
+    width: 200px;
+    padding: 19px;
+    border-radius: 20px;
+    font-size: 19px;
+}
+
+.secondary {
+    background: #242424;
+}
+
+.extra {
+    display: flex;
+    gap: 12px;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.running .controls {
+    display: none;
+}
+
+.running .display {
+    font-size: clamp(90px, 22vw, 220px);
+}
+
+@media (orientation: landscape) {
+    .display {
+        font-size: min(24vw, 35vh);
+    }
+
+    .running .display {
+        font-size: min(27vw, 45vh);
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="app" id="app">
+
+    <div class="display" id="display" onclick="toggleControls()">
+        00:00
+    </div>
+
+    <div class="controls" id="controls">
+
+        <div class="modes">
+            <button id="timerMode" class="active" onclick="setMode('timer')">
+                Таймер
+            </button>
+
+            <button id="stopwatchMode" onclick="setMode('stopwatch')">
+                Секундомер
+            </button>
+        </div>
+
+        <div class="time-inputs" id="timeInputs">
+            <input id="minutes" type="number" min="0" max="999" value="5">
+            <span class="separator">:</span>
+            <input id="seconds" type="number" min="0" max="59" value="0">
+        </div>
+
+        <button class="main-button" id="startButton" onclick="startTimer()">
+            НАЧАТЬ
+        </button>
+
+        <div class="extra">
+            <button class="secondary" onclick="resetTimer()">
+                Сброс
+            </button>
+
+            <button class="secondary" onclick="toggleLandscape()">
+                ↔ Горизонтально
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<script>
+let mode = "timer";
+let elapsed = 0;
+let duration = 300;
+let interval = null;
+let running = false;
+let paused = false;
+let controlsVisible = true;
+
+const display = document.getElementById("display");
+const app = document.getElementById("app");
+const controls = document.getElementById("controls");
+const startButton = document.getElementById("startButton");
+const timeInputs = document.getElementById("timeInputs");
+
+function formatTime(time) {
+    let total = Math.floor(time / 1000);
+
+    let h = Math.floor(total / 3600);
+    let m = Math.floor((total % 3600) / 60);
+    let s = total % 60;
+
+    if (h > 0) {
+        return String(h).padStart(2, "0") + ":" +
+               String(m).padStart(2, "0") + ":" +
+               String(s).padStart(2, "0");
+    }
+
+    return String(m).padStart(2, "0") + ":" +
+           String(s).padStart(2, "0");
+}
+
+function updateDisplay() {
+    let time = mode === "timer"
+        ? Math.max(0, duration - elapsed)
+        : elapsed;
+
+    display.textContent = formatTime(time);
+}
+
+function setMode(newMode) {
+    if (running) return;
+
+    mode = newMode;
+    elapsed = 0;
+
+    document.getElementById("timerMode")
+        .classList.toggle("active", mode === "timer");
+
+    document.getElementById("stopwatchMode")
+        .classList.toggle("active", mode === "stopwatch");
+
+    timeInputs.classList.toggle("hidden", mode !== "timer");
+
+    updateDisplay();
+}
+
+function startTimer() {
+    if (running) {
+        stopTimer();
+        return;
+    }
+
+    if (mode === "timer" && !paused) {
+        let min = Math.max(0, Number(document.getElementById("minutes").value) || 0);
+        let sec = Math.max(0, Math.min(59, Number(document.getElementById("seconds").value) || 0));
+
+        duration = (min * 60 + sec) * 1000;
+
+        if (duration <= 0) return;
+    }
+
+    running = true;
+    paused = false;
+
+    app.classList.add("running");
+
+    startButton.textContent = "ПАУЗА";
+
+    let lastTime = Date.now();
+
+    interval = setInterval(() => {
+        let now = Date.now();
+        elapsed += now - lastTime;
+        lastTime = now;
+
+        if (mode === "timer" && elapsed >= duration) {
+            elapsed = duration;
+            updateDisplay();
+            stopTimer();
+            return;
+        }
+
+        updateDisplay();
+
+    }, 50);
+}
+
+function stopTimer() {
+    clearInterval(interval);
+    interval = null;
+
+    running = false;
+    paused = true;
+
+    app.classList.remove("running");
+
+    startButton.textContent = "ПРОДОЛЖИТЬ";
+    controlsVisible = true;
+}
+
+function resetTimer() {
+    clearInterval(interval);
+    interval = null;
+
+    running = false;
+    paused = false;
+    elapsed = 0;
+
+    app.classList.remove("running");
+
+    startButton.textContent = "НАЧАТЬ";
+
+    updateDisplay();
+}
+
+function toggleControls() {
+    if (!running) return;
+
+    // Открываем управление по нажатию на цифры
+    stopTimer();
+}
+
+async function toggleLandscape() {
+    try {
+        if (!document.fullscreenElement) {
+            await document.documentElement.requestFullscreen();
+        }
+
+        if (screen.orientation && screen.orientation.lock) {
+            await screen.orientation.lock("landscape");
+        }
+    } catch (error) {
+        console.log("Ориентация управляется настройками устройства");
+    }
+}
+
+// Обновление при повороте устройства
+window.addEventListener("resize", updateDisplay);
+
+updateDisplay();
+</script>
+
+</body>
+</html>
